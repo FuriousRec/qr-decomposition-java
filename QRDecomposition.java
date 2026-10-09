@@ -81,6 +81,12 @@ public class QRDecomposition {
             if (matrix[row] == null || matrix[row].length != columns) {
                 throw new IllegalArgumentException("Matrix must be rectangular.");
             }
+            for (int column = 0; column < columns; column++) {
+                if (!Double.isFinite(matrix[row][column])) {
+                    throw new IllegalArgumentException(
+                            "Matrix entries must be finite (row " + row + ", column " + column + ").");
+                }
+            }
         }
     }
 

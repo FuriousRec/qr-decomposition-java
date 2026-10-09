@@ -1,0 +1,22 @@
+name: Verify QR decomposition
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        java: ['8', '17']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+      - name: Compile
+        run: javac -Xlint:all QRDecomposition.java QRDecompositionTest.java
+      - name: Run regression tests
+        run: java QRDecompositionTest
+      - name: Run demo
+        run: java QRDecomposition
