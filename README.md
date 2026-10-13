@@ -1,6 +1,6 @@
 # QR Decomposition
 
-This project implements QR decomposition in Java using the Gram-Schmidt process.
+This project implements QR decomposition in Java using the modified Gram-Schmidt process.
 
 QR decomposition splits a matrix `A` into two matrices:
 
@@ -45,10 +45,12 @@ rejected with an `IllegalArgumentException` identifying the zero-based row and
 column. Columns whose residual norm is below the fixed `1e-10` threshold are
 also rejected.
 
-The tests cover reconstruction, all three non-finite values in every position
-of a 3-by-2 matrix, invalid shapes, dependent columns, and rejection of
-non-finite test results. GitHub Actions compiles and runs them on Java 8 and 17.
+The tests cover reconstruction, orthogonality on an ill-conditioned matrix,
+all three non-finite values in every position of a 3-by-2 matrix, invalid
+shapes, dependent columns, and rejection of non-finite test results. GitHub Actions compiles and runs them on Java 8 and 17.
 
-This is an educational classical Gram-Schmidt implementation. Finite input
-validation does not guarantee numerical stability: very large finite values
-can still overflow, and the absolute dependency threshold is scale-sensitive.
+This is an educational modified Gram-Schmidt implementation. Each projection
+uses the progressively reduced residual vector, which retains orthogonality
+better than classical Gram-Schmidt for nearly dependent columns. It is still
+not as robust as Householder QR: very large finite values can overflow, and the
+absolute dependency threshold is scale-sensitive.

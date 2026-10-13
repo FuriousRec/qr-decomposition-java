@@ -3,6 +3,7 @@ public class QRDecompositionTest {
 
     public static void main(String[] args) {
         testQrRebuildsOriginalMatrix();
+        testIllConditionedMatrixKeepsOrthonormalColumns();
         testNonFiniteEntriesAreRejected();
         testInvalidShapesAreRejected();
         testDependentColumnsAreRejected();
@@ -21,6 +22,42 @@ public class QRDecompositionTest {
         double[][] rebuiltMatrix = multiply(result.Q, result.R);
 
         assertMatrixClose(originalMatrix, rebuiltMatrix);
+    }
+
+    private static void testIllConditionedMatrixKeepsOrthonormalColumns() {
+        double epsilon = 1e-6;
+        double[][] illConditionedMatrix = {
+                {1, 1, 1},
+                {epsilon, 0, 0},
+                {0, epsilon, 0},
+                {0, 0, epsilon}
+        };
+
+        QRDecomposition.QRResult result =
+                QRDecomposition.qrDecomposition(illConditionedMatrix);
+
+        // A classical Gram-Schmidt projection loses about 5e-5 orthogonality
+        // on this matrix. Modified Gram-Schmidt keeps the error below 1e-8.
+        for (int firstColumn = 0; firstColumn < result.Q[0].length; firstColumn++) {
+            for (int secondColumn = 0;
+                    secondColumn < result.Q[0].length;
+                    secondColumn++) {
+
+                double expected = firstColumn == secondColumn ? 1.0 : 0.0;
+                double actual = columnDotProduct(
+                        result.Q, firstColumn, secondColumn);
+                if (!Double.isFinite(actual)
+                        || Math.abs(expected - actual) > 1e-8) {
+                    throw new AssertionError(
+                            "Q columns are not orthonormal: expected "
+                                    + expected + " but got " + actual);
+                }
+            }
+        }
+
+        assertMatrixClose(
+                illConditionedMatrix,
+                multiply(result.Q, result.R));
     }
 
     private static void testNonFiniteEntriesAreRejected() {
@@ -76,6 +113,16 @@ public class QRDecompositionTest {
             }
             throw new AssertionError("Comparison accepted a non-finite result.");
         }
+    }
+
+    private static double columnDotProduct(
+            double[][] matrix, int firstColumn, int secondColumn) {
+
+        double result = 0.0;
+        for (double[] row : matrix) {
+            result += row[firstColumn] * row[secondColumn];
+        }
+        return result;
     }
 
     private static double[][] multiply(double[][] left, double[][] right) {

@@ -16,7 +16,7 @@ public class QRDecomposition {
     }
 
     /**
-     * Performs the QR decomposition using the Gram-Schmidt process.
+     * Performs the QR decomposition using the modified Gram-Schmidt process.
      */
     public static QRResult qrDecomposition(double[][] inputMatrix) {
         validateInput(inputMatrix);
@@ -38,9 +38,10 @@ public class QRDecomposition {
                 // Get a previous column of Q.
                 double[] previousQColumn = getColumn(Q, previousColumn);
 
-                // Calculate how much the current input column points in that Q direction.
+                // Project the already-reduced vector. This is modified Gram-Schmidt:
+                // using the residual improves orthogonality for nearly dependent columns.
                 R[previousColumn][currentColumn] =
-                        dotProduct(previousQColumn, getColumn(inputMatrix, currentColumn));
+                        dotProduct(previousQColumn, remainingVector);
 
                 // Subtract that part from the remaining vector.
                 for (int row = 0; row < rowCount; row++) {
