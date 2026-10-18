@@ -1,5 +1,5 @@
 public class QRDecomposition {
-    private static final double EPSILON = 1e-10;
+    private static final double RANK_TOLERANCE = 1e-12;
 
     /**
      * Helper class to store the two resulting matrices.
@@ -31,6 +31,13 @@ public class QRDecomposition {
         // Go through every column of the input matrix.
         for (int currentColumn = 0; currentColumn < columnCount; currentColumn++) {
             double[] remainingVector = getColumn(inputMatrix, currentColumn);
+            double originalColumnNorm = norm(remainingVector);
+
+            if (!Double.isFinite(originalColumnNorm)) {
+                throw new IllegalArgumentException(
+                        "Matrix column norm exceeds the finite range (column "
+                                + currentColumn + ").");
+            }
 
             // Remove the parts of the vector that point in previous Q directions.
             for (int previousColumn = 0; previousColumn < currentColumn; previousColumn++) {
@@ -51,16 +58,18 @@ public class QRDecomposition {
             }
 
             // Store the length of the remaining vector in R.
-            R[currentColumn][currentColumn] = norm(remainingVector);
+            double residualNorm = norm(remainingVector);
+            R[currentColumn][currentColumn] = residualNorm;
 
-            // If length is almost 0, the columns are linearly dependent.
-            if (Math.abs(R[currentColumn][currentColumn]) < EPSILON) {
+            // Compare relative to this column's original scale. An absolute cutoff
+            // incorrectly rejects small but independent matrices.
+            if (residualNorm <= RANK_TOLERANCE * originalColumnNorm) {
                 throw new IllegalArgumentException("Matrix columns are linearly dependent.");
             }
 
             // Normalize the remaining vector and store it as the current column of Q.
             for (int row = 0; row < rowCount; row++) {
-                Q[row][currentColumn] = remainingVector[row] / R[currentColumn][currentColumn];
+                Q[row][currentColumn] = remainingVector[row] / residualNorm;
             }
         }
 
@@ -112,9 +121,13 @@ public class QRDecomposition {
         return result;
     }
 
-    // Calculates length of a vector.
+    // Calculates length without squaring first, avoiding needless overflow/underflow.
     private static double norm(double[] vector) {
-        return Math.sqrt(dotProduct(vector, vector));
+        double result = 0.0;
+        for (double value : vector) {
+            result = Math.hypot(result, value);
+        }
+        return result;
     }
 
     // Prints a matrix nicely.
@@ -144,3 +157,4 @@ public class QRDecomposition {
         printMatrix("R", result.R);
     }
 }
+

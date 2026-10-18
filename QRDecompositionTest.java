@@ -4,6 +4,7 @@ public class QRDecompositionTest {
     public static void main(String[] args) {
         testQrRebuildsOriginalMatrix();
         testIllConditionedMatrixKeepsOrthonormalColumns();
+        testScaleExtremesRemainStable();
         testNonFiniteEntriesAreRejected();
         testInvalidShapesAreRejected();
         testDependentColumnsAreRejected();
@@ -58,6 +59,22 @@ public class QRDecompositionTest {
         assertMatrixClose(
                 illConditionedMatrix,
                 multiply(result.Q, result.R));
+    }
+
+    private static void testScaleExtremesRemainStable() {
+        for (double scale : new double[] {1e-200, 1e200}) {
+            double[][] matrix = {
+                    {scale, scale},
+                    {scale, -scale},
+                    {0, scale}
+            };
+
+            QRDecomposition.QRResult result =
+                    QRDecomposition.qrDecomposition(matrix);
+
+            assertOrthonormal(result.Q, 1e-12);
+            assertMatrixRelativeClose(matrix, multiply(result.Q, result.R), 1e-12);
+        }
     }
 
     private static void testNonFiniteEntriesAreRejected() {
@@ -125,6 +142,24 @@ public class QRDecompositionTest {
         return result;
     }
 
+    private static void assertOrthonormal(double[][] matrix, double tolerance) {
+        for (int firstColumn = 0; firstColumn < matrix[0].length; firstColumn++) {
+            for (int secondColumn = 0;
+                    secondColumn < matrix[0].length;
+                    secondColumn++) {
+
+                double expected = firstColumn == secondColumn ? 1.0 : 0.0;
+                double actual = columnDotProduct(matrix, firstColumn, secondColumn);
+                if (!Double.isFinite(actual)
+                        || Math.abs(expected - actual) > tolerance) {
+                    throw new AssertionError(
+                            "Q columns are not orthonormal: expected "
+                                    + expected + " but got " + actual);
+                }
+            }
+        }
+    }
+
     private static double[][] multiply(double[][] left, double[][] right) {
         double[][] result = new double[left.length][right[0].length];
 
@@ -150,4 +185,28 @@ public class QRDecompositionTest {
             }
         }
     }
+
+    private static void assertMatrixRelativeClose(
+            double[][] expected, double[][] actual, double relativeTolerance) {
+
+        double scale = 0.0;
+        for (double[] row : expected) {
+            for (double value : row) {
+                scale = Math.max(scale, Math.abs(value));
+            }
+        }
+        double tolerance = Math.max(Double.MIN_NORMAL, scale * relativeTolerance);
+
+        for (int row = 0; row < expected.length; row++) {
+            for (int column = 0; column < expected[row].length; column++) {
+                if (!Double.isFinite(actual[row][column])
+                        || Math.abs(expected[row][column] - actual[row][column]) > tolerance) {
+                    throw new AssertionError("Expected " + expected[row][column]
+                            + " but got " + actual[row][column]
+                            + " with tolerance " + tolerance);
+                }
+            }
+        }
+    }
 }
+
