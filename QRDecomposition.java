@@ -76,6 +76,75 @@ public class QRDecomposition {
         return new QRResult(Q, R);
     }
 
+    /**
+     * Solves the full-column-rank least-squares problem min ||Ax - b||_2.
+     *
+     * <p>For square matrices this is an ordinary linear solve. For tall
+     * matrices it returns the vector whose residual is orthogonal to every
+     * column of A.</p>
+     */
+    public static double[] solveLeastSquares(
+            double[][] inputMatrix,
+            double[] rightHandSide) {
+
+        validateInput(inputMatrix);
+        validateRightHandSide(rightHandSide, inputMatrix.length);
+
+        QRResult decomposition = qrDecomposition(inputMatrix);
+        int columnCount = inputMatrix[0].length;
+        double[] projected = new double[columnCount];
+
+        // y = Q^T b
+        for (int column = 0; column < columnCount; column++) {
+            projected[column] =
+                    dotProduct(getColumn(decomposition.Q, column), rightHandSide);
+            requireFiniteLeastSquaresValue(projected[column]);
+        }
+
+        // Solve the upper-triangular system Rx = y by back substitution.
+        double[] solution = new double[columnCount];
+        for (int row = columnCount - 1; row >= 0; row--) {
+            double remaining = projected[row];
+
+            for (int column = row + 1; column < columnCount; column++) {
+                remaining -= decomposition.R[row][column] * solution[column];
+            }
+
+            solution[row] = remaining / decomposition.R[row][row];
+            requireFiniteLeastSquaresValue(solution[row]);
+        }
+
+        return solution;
+    }
+
+    private static void validateRightHandSide(
+            double[] rightHandSide,
+            int expectedLength) {
+
+        if (rightHandSide == null) {
+            throw new IllegalArgumentException(
+                    "Right-hand side must not be null.");
+        }
+        if (rightHandSide.length != expectedLength) {
+            throw new IllegalArgumentException(
+                    "Right-hand side length must equal the matrix row count.");
+        }
+        for (int index = 0; index < rightHandSide.length; index++) {
+            if (!Double.isFinite(rightHandSide[index])) {
+                throw new IllegalArgumentException(
+                        "Right-hand side entries must be finite (index "
+                                + index + ").");
+            }
+        }
+    }
+
+    private static void requireFiniteLeastSquaresValue(double value) {
+        if (!Double.isFinite(value)) {
+            throw new ArithmeticException(
+                    "Least-squares computation produced a non-finite result.");
+        }
+    }
+
     private static void validateInput(double[][] matrix) {
         if (matrix == null || matrix.length == 0 || matrix[0] == null || matrix[0].length == 0) {
             throw new IllegalArgumentException("Matrix must not be empty.");

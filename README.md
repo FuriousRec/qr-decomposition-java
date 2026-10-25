@@ -17,6 +17,27 @@ QRDecomposition.java
 QRDecompositionTest.java
 ```
 
+## Least-squares solving
+
+The same implementation can solve square systems and full-column-rank
+overdetermined systems without forming the less stable normal equations:
+
+```java
+double[][] design = {
+    {1, 0},
+    {1, 1},
+    {1, 2}
+};
+double[] observations = {1, 2, 2};
+
+double[] coefficients =
+        QRDecomposition.solveLeastSquares(design, observations);
+// coefficients: intercept = 7/6, slope = 1/2
+```
+
+The solver calculates `Q^T b` and then uses back substitution on `R`.
+For overdetermined inputs it minimizes the Euclidean residual `||Ax-b||`.
+
 ## Run the Demo
 
 ```bash
@@ -48,7 +69,8 @@ change whether its columns are considered dependent.
 
 The tests cover reconstruction, orthogonality on an ill-conditioned matrix,
 all three non-finite values in every position of a 3-by-2 matrix, invalid
-shapes, dependent columns, extreme finite scales, and rejection of non-finite
+shapes, dependent columns, extreme finite scales, least-squares solutions,
+normal-equation residuals, invalid right-hand sides, and rejection of non-finite
 test results. GitHub Actions compiles and runs them on Java 8 and 17.
 
 This is an educational modified Gram-Schmidt implementation. Each projection
