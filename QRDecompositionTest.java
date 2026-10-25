@@ -5,6 +5,11 @@ public class QRDecompositionTest {
         testQrRebuildsOriginalMatrix();
         testIllConditionedMatrixKeepsOrthonormalColumns();
         testScaleExtremesRemainStable();
+        testSolvesExactSquareSystem();
+        testFitsOverdeterminedData();
+        testLeastSquaresResidualIsOrthogonal();
+        testLeastSquaresScaleExtremes();
+        testInvalidRightHandSidesAreRejected();
         testNonFiniteEntriesAreRejected();
         testInvalidShapesAreRejected();
         testDependentColumnsAreRejected();
@@ -75,6 +80,132 @@ public class QRDecompositionTest {
             assertOrthonormal(result.Q, 1e-12);
             assertMatrixRelativeClose(matrix, multiply(result.Q, result.R), 1e-12);
         }
+    }
+
+    private static void testSolvesExactSquareSystem() {
+        double[][] matrix = {
+                {2, 1},
+                {1, 3}
+        };
+        double[] rightHandSide = {1, 2};
+
+        assertVectorClose(
+                new double[] {0.2, 0.6},
+                QRDecomposition.solveLeastSquares(matrix, rightHandSide),
+                1e-12);
+    }
+
+    private static void testFitsOverdeterminedData() {
+        // Best-fit line through (0,1), (1,2), (2,2):
+        // intercept = 7/6 and slope = 1/2.
+        double[][] designMatrix = {
+                {1, 0},
+                {1, 1},
+                {1, 2}
+        };
+        double[] observations = {1, 2, 2};
+
+        assertVectorClose(
+                new double[] {7.0 / 6.0, 0.5},
+                QRDecomposition.solveLeastSquares(
+                        designMatrix, observations),
+                1e-12);
+    }
+
+    private static void testLeastSquaresResidualIsOrthogonal() {
+        double[][] matrix = {
+                {1, 0},
+                {1, 1},
+                {1, 2},
+                {1, 3}
+        };
+        double[] rightHandSide = {1, 2, 2, 5};
+        double[] solution =
+                QRDecomposition.solveLeastSquares(matrix, rightHandSide);
+
+        for (int column = 0; column < matrix[0].length; column++) {
+            double normalEquationResidual = 0.0;
+            for (int row = 0; row < matrix.length; row++) {
+                double fitted = 0.0;
+                for (int inner = 0; inner < solution.length; inner++) {
+                    fitted += matrix[row][inner] * solution[inner];
+                }
+                normalEquationResidual +=
+                        matrix[row][column]
+                                * (fitted - rightHandSide[row]);
+            }
+
+            if (Math.abs(normalEquationResidual) > 1e-12) {
+                throw new AssertionError(
+                        "Residual is not orthogonal to column "
+                                + column + ": " + normalEquationResidual);
+            }
+        }
+    }
+
+    private static void testLeastSquaresScaleExtremes() {
+        for (double scale : new double[] {1e-200, 1e200}) {
+            double[][] matrix = {
+                    {scale, 0},
+                    {0, scale},
+                    {scale, scale}
+            };
+            double[] rightHandSide = {
+                    2 * scale,
+                    -3 * scale,
+                    -scale
+            };
+
+            assertVectorClose(
+                    new double[] {2, -3},
+                    QRDecomposition.solveLeastSquares(
+                            matrix, rightHandSide),
+                    1e-12);
+        }
+    }
+
+    private static void testInvalidRightHandSidesAreRejected() {
+        double[][] matrix = {
+                {1, 0},
+                {0, 1},
+                {1, 1}
+        };
+
+        assertLeastSquaresRejected(
+                matrix,
+                null,
+                "Right-hand side must not be null.");
+        assertLeastSquaresRejected(
+                matrix,
+                new double[] {1, 2},
+                "Right-hand side length must equal the matrix row count.");
+        assertLeastSquaresRejected(
+                matrix,
+                new double[] {1, Double.NaN, 3},
+                "Right-hand side entries must be finite (index 1).");
+        assertLeastSquaresRejected(
+                matrix,
+                new double[] {1, Double.POSITIVE_INFINITY, 3},
+                "Right-hand side entries must be finite (index 1).");
+    }
+
+    private static void assertLeastSquaresRejected(
+            double[][] matrix,
+            double[] rightHandSide,
+            String expectedMessage) {
+
+        try {
+            QRDecomposition.solveLeastSquares(matrix, rightHandSide);
+        } catch (IllegalArgumentException expected) {
+            if (!expectedMessage.equals(expected.getMessage())) {
+                throw new AssertionError(
+                        "Unexpected validation message: "
+                                + expected.getMessage());
+            }
+            return;
+        }
+        throw new AssertionError(
+                "Expected invalid right-hand side to be rejected.");
     }
 
     private static void testNonFiniteEntriesAreRejected() {
@@ -172,6 +303,28 @@ public class QRDecompositionTest {
         }
 
         return result;
+    }
+
+    private static void assertVectorClose(
+            double[] expected,
+            double[] actual,
+            double tolerance) {
+
+        if (expected.length != actual.length) {
+            throw new AssertionError(
+                    "Vector lengths differ: expected "
+                            + expected.length + " but got " + actual.length);
+        }
+
+        for (int index = 0; index < expected.length; index++) {
+            if (!Double.isFinite(actual[index])
+                    || Math.abs(expected[index] - actual[index]) > tolerance) {
+                throw new AssertionError(
+                        "Expected " + expected[index]
+                                + " but got " + actual[index]
+                                + " at index " + index);
+            }
+        }
     }
 
     private static void assertMatrixClose(double[][] expected, double[][] actual) {
