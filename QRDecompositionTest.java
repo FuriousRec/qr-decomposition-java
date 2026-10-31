@@ -9,6 +9,9 @@ public class QRDecompositionTest {
         testFitsOverdeterminedData();
         testLeastSquaresResidualIsOrthogonal();
         testLeastSquaresScaleExtremes();
+        testSolvesMultipleRightHandSides();
+        testMultipleRightHandSidesAtScaleExtremes();
+        testInvalidRightHandSideMatricesAreRejected();
         testInvalidRightHandSidesAreRejected();
         testNonFiniteEntriesAreRejected();
         testInvalidShapesAreRejected();
@@ -162,6 +165,124 @@ public class QRDecompositionTest {
                             matrix, rightHandSide),
                     1e-12);
         }
+    }
+
+    private static void testSolvesMultipleRightHandSides() {
+        double[][] matrix = {
+                {1, 0},
+                {1, 1},
+                {1, 2}
+        };
+        // Two exact systems: [1, 3] and [2, -1].
+        double[][] rightHandSides = {
+                {1, 2},
+                {4, 1},
+                {7, 0}
+        };
+
+        assertMatrixClose(
+                new double[][] {
+                        {1, 2},
+                        {3, -1}
+                },
+                QRDecomposition.solveLeastSquares(
+                        matrix, rightHandSides));
+    }
+
+    private static void testMultipleRightHandSidesAtScaleExtremes() {
+        for (double scale : new double[] {1e-200, 1e200}) {
+            double[][] matrix = {
+                    {scale, 0},
+                    {0, scale},
+                    {scale, scale}
+            };
+            double[][] rightHandSides = {
+                    {2 * scale, -scale},
+                    {-3 * scale, 4 * scale},
+                    {-scale, 3 * scale}
+            };
+
+            assertMatrixRelativeClose(
+                    new double[][] {
+                            {2, -1},
+                            {-3, 4}
+                    },
+                    QRDecomposition.solveLeastSquares(
+                            matrix, rightHandSides),
+                    1e-12);
+        }
+    }
+
+    private static void testInvalidRightHandSideMatricesAreRejected() {
+        double[][] matrix = {
+                {1, 0},
+                {0, 1},
+                {1, 1}
+        };
+
+        assertLeastSquaresMatrixRejected(
+                matrix,
+                null,
+                "Right-hand side matrix must not be empty.");
+        assertLeastSquaresMatrixRejected(
+                matrix,
+                new double[0][],
+                "Right-hand side matrix must not be empty.");
+        assertLeastSquaresMatrixRejected(
+                matrix,
+                new double[][] {null},
+                "Right-hand side matrix must not be empty.");
+        assertLeastSquaresMatrixRejected(
+                matrix,
+                new double[][] {{}, {}, {}},
+                "Right-hand side matrix must not be empty.");
+        assertLeastSquaresMatrixRejected(
+                matrix,
+                new double[][] {{1}, {2}},
+                "Right-hand side matrix row count must equal "
+                        + "the matrix row count.");
+        assertLeastSquaresMatrixRejected(
+                matrix,
+                new double[][] {{1, 2}, {3}, {4, 5}},
+                "Right-hand side matrix must be rectangular.");
+        assertLeastSquaresMatrixRejected(
+                matrix,
+                new double[][] {
+                        {1, 2},
+                        {3, Double.NaN},
+                        {4, 5}
+                },
+                "Right-hand side matrix entries must be finite "
+                        + "(row 1, column 1).");
+        assertLeastSquaresMatrixRejected(
+                matrix,
+                new double[][] {
+                        {1, 2},
+                        {3, Double.NEGATIVE_INFINITY},
+                        {4, 5}
+                },
+                "Right-hand side matrix entries must be finite "
+                        + "(row 1, column 1).");
+    }
+
+    private static void assertLeastSquaresMatrixRejected(
+            double[][] matrix,
+            double[][] rightHandSides,
+            String expectedMessage) {
+
+        try {
+            QRDecomposition.solveLeastSquares(
+                    matrix, rightHandSides);
+        } catch (IllegalArgumentException expected) {
+            if (!expectedMessage.equals(expected.getMessage())) {
+                throw new AssertionError(
+                        "Unexpected validation message: "
+                                + expected.getMessage());
+            }
+            return;
+        }
+        throw new AssertionError(
+                "Expected invalid right-hand side matrix to be rejected.");
     }
 
     private static void testInvalidRightHandSidesAreRejected() {

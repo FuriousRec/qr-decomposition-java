@@ -38,6 +38,22 @@ double[] coefficients =
 The solver calculates `Q^T b` and then uses back substitution on `R`.
 For overdetermined inputs it minimizes the Euclidean residual `||Ax-b||`.
 
+Multiple output vectors can be solved together without recomputing the QR
+decomposition. Each column of `observations` is an independent right-hand
+side, and each result column contains its coefficients:
+
+```java
+double[][] observations = {
+    {1, 2},
+    {4, 1},
+    {7, 0}
+};
+
+double[][] coefficients =
+        QRDecomposition.solveLeastSquares(design, observations);
+// columns: [1, 3] and [2, -1]
+```
+
 ## Run the Demo
 
 ```bash
@@ -69,7 +85,7 @@ change whether its columns are considered dependent.
 
 The tests cover reconstruction, orthogonality on an ill-conditioned matrix,
 all three non-finite values in every position of a 3-by-2 matrix, invalid
-shapes, dependent columns, extreme finite scales, least-squares solutions,
+shapes, dependent columns, extreme finite scales, vector and multi-output least-squares solutions,
 normal-equation residuals, invalid right-hand sides, and rejection of non-finite
 test results. GitHub Actions compiles and runs them on Java 8 and 17.
 
