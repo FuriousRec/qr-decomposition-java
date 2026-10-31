@@ -117,6 +117,110 @@ public class QRDecomposition {
         return solution;
     }
 
+    /**
+     * Solves several full-column-rank least-squares problems with one QR
+     * decomposition.
+     *
+     * <p>Each column of {@code rightHandSides} is an independent right-hand
+     * side. If A is m-by-n and B is m-by-k, the returned solution is n-by-k
+     * and minimizes ||AX-B|| for every column of B.</p>
+     */
+    public static double[][] solveLeastSquares(
+            double[][] inputMatrix,
+            double[][] rightHandSides) {
+
+        validateInput(inputMatrix);
+        validateRightHandSides(rightHandSides, inputMatrix.length);
+
+        QRResult decomposition = qrDecomposition(inputMatrix);
+        int rowCount = inputMatrix.length;
+        int columnCount = inputMatrix[0].length;
+        int rightHandSideCount = rightHandSides[0].length;
+        double[][] projected =
+                new double[columnCount][rightHandSideCount];
+
+        // Y = Q^T B. The QR decomposition is shared by every right-hand side.
+        for (int column = 0; column < columnCount; column++) {
+            for (int rightHandSide = 0;
+                    rightHandSide < rightHandSideCount;
+                    rightHandSide++) {
+
+                double value = 0.0;
+                for (int row = 0; row < rowCount; row++) {
+                    value += decomposition.Q[row][column]
+                            * rightHandSides[row][rightHandSide];
+                }
+                requireFiniteLeastSquaresValue(value);
+                projected[column][rightHandSide] = value;
+            }
+        }
+
+        double[][] solution =
+                new double[columnCount][rightHandSideCount];
+
+        // Solve RX = Y by back substitution, one result column at a time.
+        for (int rightHandSide = 0;
+                rightHandSide < rightHandSideCount;
+                rightHandSide++) {
+
+            for (int row = columnCount - 1; row >= 0; row--) {
+                double remaining = projected[row][rightHandSide];
+
+                for (int column = row + 1;
+                        column < columnCount;
+                        column++) {
+
+                    remaining -= decomposition.R[row][column]
+                            * solution[column][rightHandSide];
+                }
+
+                solution[row][rightHandSide] =
+                        remaining / decomposition.R[row][row];
+                requireFiniteLeastSquaresValue(
+                        solution[row][rightHandSide]);
+            }
+        }
+
+        return solution;
+    }
+
+    private static void validateRightHandSides(
+            double[][] rightHandSides,
+            int expectedRows) {
+
+        if (rightHandSides == null
+                || rightHandSides.length == 0
+                || rightHandSides[0] == null
+                || rightHandSides[0].length == 0) {
+
+            throw new IllegalArgumentException(
+                    "Right-hand side matrix must not be empty.");
+        }
+        if (rightHandSides.length != expectedRows) {
+            throw new IllegalArgumentException(
+                    "Right-hand side matrix row count must equal "
+                            + "the matrix row count.");
+        }
+
+        int columns = rightHandSides[0].length;
+        for (int row = 0; row < rightHandSides.length; row++) {
+            if (rightHandSides[row] == null
+                    || rightHandSides[row].length != columns) {
+
+                throw new IllegalArgumentException(
+                        "Right-hand side matrix must be rectangular.");
+            }
+            for (int column = 0; column < columns; column++) {
+                if (!Double.isFinite(rightHandSides[row][column])) {
+                    throw new IllegalArgumentException(
+                            "Right-hand side matrix entries must be finite "
+                                    + "(row " + row
+                                    + ", column " + column + ").");
+                }
+            }
+        }
+    }
+
     private static void validateRightHandSide(
             double[] rightHandSide,
             int expectedLength) {
