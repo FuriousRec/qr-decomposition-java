@@ -11,6 +11,10 @@ public class QRDecompositionTest {
         testLeastSquaresScaleExtremes();
         testSolvesMultipleRightHandSides();
         testMultipleRightHandSidesAtScaleExtremes();
+        testPseudoInverseSatisfiesMoorePenroseIdentities();
+        testPseudoInverseMatchesLeastSquares();
+        testPseudoInverseAtScaleExtremes();
+        testPseudoInverseRejectsDependentColumns();
         testInvalidRightHandSideMatricesAreRejected();
         testInvalidRightHandSidesAreRejected();
         testNonFiniteEntriesAreRejected();
@@ -211,6 +215,85 @@ public class QRDecompositionTest {
                             matrix, rightHandSides),
                     1e-12);
         }
+    }
+
+    private static void testPseudoInverseSatisfiesMoorePenroseIdentities() {
+        double[][] matrix = {
+                {1, 0},
+                {1, 1},
+                {1, 2}
+        };
+        double[][] pseudoInverse = QRDecomposition.pseudoInverse(matrix);
+
+        assertMatrixClose(
+                new double[][] {
+                        {5.0 / 6.0, 1.0 / 3.0, -1.0 / 6.0},
+                        {-0.5, 0.0, 0.5}
+                },
+                pseudoInverse);
+        assertMatrixClose(
+                new double[][] {{1, 0}, {0, 1}},
+                multiply(pseudoInverse, matrix));
+        assertMatrixClose(
+                matrix,
+                multiply(multiply(matrix, pseudoInverse), matrix));
+    }
+
+    private static void testPseudoInverseMatchesLeastSquares() {
+        double[][] matrix = {
+                {1, 0},
+                {1, 1},
+                {1, 2}
+        };
+        double[] observations = {1, 2, 2};
+        double[][] observationColumn = {{1}, {2}, {2}};
+        double[][] coefficients =
+                multiply(QRDecomposition.pseudoInverse(matrix),
+                        observationColumn);
+
+        assertVectorClose(
+                QRDecomposition.solveLeastSquares(matrix, observations),
+                new double[] {coefficients[0][0], coefficients[1][0]},
+                1e-12);
+    }
+
+    private static void testPseudoInverseAtScaleExtremes() {
+        for (double scale : new double[] {1e-200, 1e200}) {
+            double[][] matrix = {
+                    {scale, 0},
+                    {scale, scale},
+                    {scale, 2 * scale}
+            };
+            double inverseScale = 1.0 / scale;
+
+            assertMatrixRelativeClose(
+                    new double[][] {
+                            {5.0 / 6.0 * inverseScale,
+                                    1.0 / 3.0 * inverseScale,
+                                    -1.0 / 6.0 * inverseScale},
+                            {-0.5 * inverseScale, 0.0,
+                                    0.5 * inverseScale}
+                    },
+                    QRDecomposition.pseudoInverse(matrix),
+                    1e-12);
+        }
+    }
+
+    private static void testPseudoInverseRejectsDependentColumns() {
+        try {
+            QRDecomposition.pseudoInverse(
+                    new double[][] {{1, 2}, {2, 4}});
+        } catch (IllegalArgumentException expected) {
+            if (!"Matrix columns are linearly dependent."
+                    .equals(expected.getMessage())) {
+                throw new AssertionError(
+                        "Unexpected validation message: "
+                                + expected.getMessage());
+            }
+            return;
+        }
+        throw new AssertionError(
+                "Pseudoinverse accepted dependent columns.");
     }
 
     private static void testInvalidRightHandSideMatricesAreRejected() {

@@ -184,6 +184,40 @@ public class QRDecomposition {
         return solution;
     }
 
+    /**
+     * Computes the Moore-Penrose pseudoinverse of a square or tall,
+     * full-column-rank matrix.
+     *
+     * <p>If A = QR, then A+ = R^-1 Q^T. This implementation applies
+     * back substitution directly to the columns of Q^T, avoiding the less
+     * stable normal-equation form (A^T A)^-1 A^T.</p>
+     */
+    public static double[][] pseudoInverse(double[][] inputMatrix) {
+        QRResult decomposition = qrDecomposition(inputMatrix);
+        int rowCount = inputMatrix.length;
+        int columnCount = inputMatrix[0].length;
+        double[][] result = new double[columnCount][rowCount];
+
+        // Each column of Q^T is the projection of one identity basis vector.
+        // Solve R * A+ = Q^T by back substitution, one output column at a time.
+        for (int outputColumn = 0; outputColumn < rowCount; outputColumn++) {
+            for (int row = columnCount - 1; row >= 0; row--) {
+                double remaining = decomposition.Q[outputColumn][row];
+
+                for (int column = row + 1; column < columnCount; column++) {
+                    remaining -= decomposition.R[row][column]
+                            * result[column][outputColumn];
+                }
+
+                result[row][outputColumn] =
+                        remaining / decomposition.R[row][row];
+                requireFiniteLeastSquaresValue(result[row][outputColumn]);
+            }
+        }
+
+        return result;
+    }
+
     private static void validateRightHandSides(
             double[][] rightHandSides,
             int expectedRows) {
