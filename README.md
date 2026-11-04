@@ -54,6 +54,22 @@ double[][] coefficients =
 // columns: [1, 3] and [2, -1]
 ```
 
+## Moore-Penrose pseudoinverse
+
+Square and tall full-column-rank matrices can also be converted into their
+Moore-Penrose pseudoinverse:
+
+```java
+double[][] pseudoInverse = QRDecomposition.pseudoInverse(design);
+// shape: number of columns in design x number of rows in design
+```
+
+For `A = QR`, the implementation solves `R A+ = Q^T` directly with back
+substitution. It does not form `A^T A`, and it does not allocate a square
+identity matrix with one row per observation. Multiplying `A+` by an
+observation vector gives the same full-rank least-squares coefficients as
+`solveLeastSquares(A, b)`.
+
 ## Run the Demo
 
 ```bash
@@ -86,8 +102,8 @@ change whether its columns are considered dependent.
 The tests cover reconstruction, orthogonality on an ill-conditioned matrix,
 all three non-finite values in every position of a 3-by-2 matrix, invalid
 shapes, dependent columns, extreme finite scales, vector and multi-output least-squares solutions,
-normal-equation residuals, invalid right-hand sides, and rejection of non-finite
-test results. GitHub Actions compiles and runs them on Java 8 and 17.
+pseudoinverse identities and least-squares equivalence, normal-equation residuals,
+invalid right-hand sides, and rejection of non-finite test results. GitHub Actions compiles and runs them on Java 8 and 17.
 
 This is an educational modified Gram-Schmidt implementation. Each projection
 uses the progressively reduced residual vector, which retains orthogonality
