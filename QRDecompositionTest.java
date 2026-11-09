@@ -14,7 +14,11 @@ public class QRDecompositionTest {
         testPseudoInverseSatisfiesMoorePenroseIdentities();
         testPseudoInverseMatchesLeastSquares();
         testPseudoInverseAtScaleExtremes();
+        testWidePseudoInverseSatisfiesMoorePenroseIdentities();
+        testWidePseudoInverseReturnsMinimumNormSolution();
+        testWidePseudoInverseAtScaleExtremes();
         testPseudoInverseRejectsDependentColumns();
+        testWidePseudoInverseRejectsDependentRows();
         testInvalidRightHandSideMatricesAreRejected();
         testInvalidRightHandSidesAreRejected();
         testNonFiniteEntriesAreRejected();
@@ -294,6 +298,96 @@ public class QRDecompositionTest {
         }
         throw new AssertionError(
                 "Pseudoinverse accepted dependent columns.");
+    }
+
+    private static void testWidePseudoInverseSatisfiesMoorePenroseIdentities() {
+        double[][] matrix = {
+                {1, 0, 1},
+                {0, 1, 1}
+        };
+        double[][] pseudoInverse = QRDecomposition.pseudoInverse(matrix);
+
+        assertMatrixClose(
+                new double[][] {
+                        {2.0 / 3.0, -1.0 / 3.0},
+                        {-1.0 / 3.0, 2.0 / 3.0},
+                        {1.0 / 3.0, 1.0 / 3.0}
+                },
+                pseudoInverse);
+        assertMatrixClose(
+                new double[][] {{1, 0}, {0, 1}},
+                multiply(matrix, pseudoInverse));
+        assertMatrixClose(
+                matrix,
+                multiply(multiply(matrix, pseudoInverse), matrix));
+        assertMatrixClose(
+                pseudoInverse,
+                multiply(multiply(pseudoInverse, matrix), pseudoInverse));
+    }
+
+    private static void testWidePseudoInverseReturnsMinimumNormSolution() {
+        double[][] matrix = {
+                {1, 0, 1},
+                {0, 1, 1}
+        };
+        double[][] solution = multiply(
+                QRDecomposition.pseudoInverse(matrix),
+                new double[][] {{1}, {2}});
+
+        assertMatrixClose(new double[][] {{0}, {1}, {1}}, solution);
+        assertMatrixClose(
+                new double[][] {{1}, {2}},
+                multiply(matrix, solution));
+
+        // [-1, -1, 1] spans A's null space. The minimum-norm solution
+        // is orthogonal to it.
+        double nullSpaceDot = -solution[0][0]
+                - solution[1][0]
+                + solution[2][0];
+        if (Math.abs(nullSpaceDot) > 1e-12) {
+            throw new AssertionError(
+                    "Wide solution is not orthogonal to the null space: "
+                            + nullSpaceDot);
+        }
+    }
+
+    private static void testWidePseudoInverseAtScaleExtremes() {
+        for (double scale : new double[] {1e-200, 1e200}) {
+            double[][] matrix = {
+                    {scale, 0, scale},
+                    {0, scale, scale}
+            };
+            double inverseScale = 1.0 / scale;
+
+            assertMatrixRelativeClose(
+                    new double[][] {
+                            {2.0 / 3.0 * inverseScale,
+                                    -1.0 / 3.0 * inverseScale},
+                            {-1.0 / 3.0 * inverseScale,
+                                    2.0 / 3.0 * inverseScale},
+                            {1.0 / 3.0 * inverseScale,
+                                    1.0 / 3.0 * inverseScale}
+                    },
+                    QRDecomposition.pseudoInverse(matrix),
+                    1e-12);
+        }
+    }
+
+    private static void testWidePseudoInverseRejectsDependentRows() {
+        try {
+            QRDecomposition.pseudoInverse(
+                    new double[][] {{1, 2, 3}, {2, 4, 6}});
+        } catch (IllegalArgumentException expected) {
+            if (!"Matrix columns are linearly dependent."
+                    .equals(expected.getMessage())) {
+                throw new AssertionError(
+                        "Unexpected validation message: "
+                                + expected.getMessage());
+            }
+            return;
+        }
+        throw new AssertionError(
+                "Pseudoinverse accepted dependent rows.");
     }
 
     private static void testInvalidRightHandSideMatricesAreRejected() {
