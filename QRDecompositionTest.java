@@ -19,6 +19,7 @@ public class QRDecompositionTest {
         testWidePseudoInverseAtScaleExtremes();
         testPseudoInverseRejectsDependentColumns();
         testWidePseudoInverseRejectsDependentRows();
+        testWidePseudoInverseValidatesInput();
         testInvalidRightHandSideMatricesAreRejected();
         testInvalidRightHandSidesAreRejected();
         testNonFiniteEntriesAreRejected();
@@ -388,6 +389,33 @@ public class QRDecompositionTest {
         }
         throw new AssertionError(
                 "Pseudoinverse accepted dependent rows.");
+    }
+
+    private static void testWidePseudoInverseValidatesInput() {
+        assertPseudoInverseRejected(
+                new double[][] {{1, 0, Double.NaN}, {0, 1, 1}},
+                "Matrix entries must be finite (row 0, column 2).");
+        assertPseudoInverseRejected(
+                new double[][] {{1, 0, 1}, {0, 1}},
+                "Matrix must be rectangular.");
+    }
+
+    private static void assertPseudoInverseRejected(
+            double[][] matrix,
+            String expectedMessage) {
+
+        try {
+            QRDecomposition.pseudoInverse(matrix);
+        } catch (IllegalArgumentException expected) {
+            if (!expectedMessage.equals(expected.getMessage())) {
+                throw new AssertionError(
+                        "Unexpected validation message: "
+                                + expected.getMessage());
+            }
+            return;
+        }
+        throw new AssertionError(
+                "Pseudoinverse accepted an invalid wide matrix.");
     }
 
     private static void testInvalidRightHandSideMatricesAreRejected() {
