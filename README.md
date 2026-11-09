@@ -56,19 +56,20 @@ double[][] coefficients =
 
 ## Moore-Penrose pseudoinverse
 
-Square and tall full-column-rank matrices can also be converted into their
-Moore-Penrose pseudoinverse:
+Any rectangular full-rank matrix can also be converted into its Moore-Penrose
+pseudoinverse. Tall matrices require full column rank; wide matrices require
+full row rank:
 
 ```java
 double[][] pseudoInverse = QRDecomposition.pseudoInverse(design);
 // shape: number of columns in design x number of rows in design
 ```
 
-For `A = QR`, the implementation solves `R A+ = Q^T` directly with back
-substitution. It does not form `A^T A`, and it does not allocate a square
-identity matrix with one row per observation. Multiplying `A+` by an
-observation vector gives the same full-rank least-squares coefficients as
-`solveLeastSquares(A, b)`.
+For a tall `A = QR`, the implementation solves `R A+ = Q^T` directly with back
+substitution. For a wide matrix it decomposes `A^T = QR` and computes
+`A+ = Q R^-T` with forward substitution. Neither path forms normal equations.
+For underdetermined wide systems, multiplying `A+` by a target vector returns
+the exact solution with minimum Euclidean norm.
 
 ## Run the Demo
 
@@ -92,17 +93,19 @@ All QR regression tests passed.
 
 ## Input validation
 
-Input must be a nonempty rectangular matrix with at least as many rows as
-columns. Every entry must be finite: `NaN` and positive/negative infinity are
-rejected with an `IllegalArgumentException` identifying the zero-based row and
-column. Rank detection compares each residual norm with its original column
+Input must be a nonempty rectangular matrix. QR decomposition and least-squares
+solving require at least as many rows as columns; pseudoinverse also accepts
+wide full-row-rank matrices. Every entry must be finite: `NaN` and
+positive/negative infinity are rejected with an `IllegalArgumentException`
+identifying the zero-based row and column. Rank detection compares each residual norm with its original column
 norm using a relative `1e-12` tolerance, so uniformly scaling a matrix does not
 change whether its columns are considered dependent.
 
 The tests cover reconstruction, orthogonality on an ill-conditioned matrix,
 all three non-finite values in every position of a 3-by-2 matrix, invalid
-shapes, dependent columns, extreme finite scales, vector and multi-output least-squares solutions,
-pseudoinverse identities and least-squares equivalence, normal-equation residuals,
+shapes, dependent columns, extreme finite scales, vector and multi-output
+least-squares solutions, pseudoinverse identities, tall least-squares
+equivalence, wide minimum-norm solutions, normal-equation residuals,
 invalid right-hand sides, and rejection of non-finite test results. GitHub Actions compiles and runs them on Java 8 and 17.
 
 This is an educational modified Gram-Schmidt implementation. Each projection

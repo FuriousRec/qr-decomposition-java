@@ -185,17 +185,20 @@ public class QRDecomposition {
     }
 
     /**
-     * Computes the Moore-Penrose pseudoinverse of a square or tall,
-     * full-column-rank matrix.
+     * Computes the Moore-Penrose pseudoinverse of a full-rank matrix.
      *
-     * <p>If A = QR, then A+ = R^-1 Q^T. This implementation applies
-     * back substitution directly to the columns of Q^T, avoiding the less
-     * stable normal-equation form (A^T A)^-1 A^T.</p>
+     * <p>For tall A = QR, A+ = R^-1 Q^T. For wide A^T = QR,
+     * A+ = Q R^-T. Both paths use triangular substitution and avoid
+     * forming normal equations.</p>
      */
     public static double[][] pseudoInverse(double[][] inputMatrix) {
+        int columnCount = validateMatrix(inputMatrix);
+        if (inputMatrix.length < columnCount) {
+            return pseudoInverseWide(inputMatrix);
+        }
+
         QRResult decomposition = qrDecomposition(inputMatrix);
         int rowCount = inputMatrix.length;
-        int columnCount = inputMatrix[0].length;
         double[][] result = new double[columnCount][rowCount];
 
         // Each column of Q^T is the projection of one identity basis vector.
@@ -212,6 +215,53 @@ public class QRDecomposition {
                 result[row][outputColumn] =
                         remaining / decomposition.R[row][row];
                 requireFiniteLeastSquaresValue(result[row][outputColumn]);
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * Computes A+ for a wide full-row-rank matrix from A^T = QR.
+     * In that case A+ = Q R^-T.
+     */
+    private static double[][] pseudoInverseWide(double[][] inputMatrix) {
+        int rowCount = inputMatrix.length;
+        int columnCount = inputMatrix[0].length;
+        QRResult transposeDecomposition =
+                qrDecomposition(transpose(inputMatrix));
+        double[][] result = new double[columnCount][rowCount];
+
+        // Solve R^T z = e_j by forward substitution, then form Qz.
+        for (int outputColumn = 0;
+                outputColumn < rowCount;
+                outputColumn++) {
+
+            double[] triangularSolution = new double[rowCount];
+            for (int row = 0; row < rowCount; row++) {
+                double remaining = row == outputColumn ? 1.0 : 0.0;
+
+                for (int column = 0; column < row; column++) {
+                    remaining -= transposeDecomposition.R[column][row]
+                            * triangularSolution[column];
+                }
+
+                triangularSolution[row] = remaining
+                        / transposeDecomposition.R[row][row];
+                requireFiniteLeastSquaresValue(triangularSolution[row]);
+            }
+
+            for (int outputRow = 0;
+                    outputRow < columnCount;
+                    outputRow++) {
+
+                double value = 0.0;
+                for (int column = 0; column < rowCount; column++) {
+                    value += transposeDecomposition.Q[outputRow][column]
+                            * triangularSolution[column];
+                }
+                requireFiniteLeastSquaresValue(value);
+                result[outputRow][outputColumn] = value;
             }
         }
 
@@ -284,15 +334,19 @@ public class QRDecomposition {
     }
 
     private static void validateInput(double[][] matrix) {
+        int columns = validateMatrix(matrix);
+
+        if (matrix.length < columns) {
+            throw new IllegalArgumentException("QR decomposition requires at least as many rows as columns.");
+        }
+    }
+
+    private static int validateMatrix(double[][] matrix) {
         if (matrix == null || matrix.length == 0 || matrix[0] == null || matrix[0].length == 0) {
             throw new IllegalArgumentException("Matrix must not be empty.");
         }
 
         int columns = matrix[0].length;
-
-        if (matrix.length < columns) {
-            throw new IllegalArgumentException("QR decomposition requires at least as many rows as columns.");
-        }
 
         for (int row = 0; row < matrix.length; row++) {
             if (matrix[row] == null || matrix[row].length != columns) {
@@ -305,6 +359,8 @@ public class QRDecomposition {
                 }
             }
         }
+
+        return columns;
     }
 
     // --- Helper Methods ---
@@ -316,6 +372,16 @@ public class QRDecomposition {
         }
 
         return column;
+    }
+
+    private static double[][] transpose(double[][] matrix) {
+        double[][] result = new double[matrix[0].length][matrix.length];
+        for (int row = 0; row < matrix.length; row++) {
+            for (int column = 0; column < matrix[row].length; column++) {
+                result[column][row] = matrix[row][column];
+            }
+        }
+        return result;
     }
 
     private static double dotProduct(double[] firstVector, double[] secondVector) {
