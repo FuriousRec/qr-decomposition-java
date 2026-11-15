@@ -37,6 +37,24 @@ double[] coefficients =
 
 The solver calculates `Q^T b` and then uses back substitution on `R`.
 For overdetermined inputs it minimizes the Euclidean residual `||Ax-b||`.
+For a wide, full-row-rank matrix it instead solves through the QR decomposition
+of `A^T`, returning the exact solution with minimum Euclidean norm:
+
+```java
+double[][] underdetermined = {
+    {1, 0, 1},
+    {0, 1, 1}
+};
+double[] target = {1, 2};
+
+double[] minimumNorm =
+        QRDecomposition.solveLeastSquares(underdetermined, target);
+// [0, 1, 1]
+```
+
+This avoids forming normal equations or explicitly constructing the
+pseudoinverse. The multi-output overload supports wide matrices as well and
+shares one QR decomposition across all target columns.
 
 Multiple output vectors can be solved together without recomputing the QR
 decomposition. Each column of `observations` is an independent right-hand
@@ -93,9 +111,9 @@ All QR regression tests passed.
 
 ## Input validation
 
-Input must be a nonempty rectangular matrix. QR decomposition and least-squares
-solving require at least as many rows as columns; pseudoinverse also accepts
-wide full-row-rank matrices. Every entry must be finite: `NaN` and
+Input must be a nonempty rectangular matrix. QR decomposition itself requires
+at least as many rows as columns. Least-squares solving and pseudoinverse accept
+both tall full-column-rank and wide full-row-rank matrices. Every entry must be finite: `NaN` and
 positive/negative infinity are rejected with an `IllegalArgumentException`
 identifying the zero-based row and column. Rank detection compares each residual norm with its original column
 norm using a relative `1e-12` tolerance, so uniformly scaling a matrix does not
@@ -105,7 +123,8 @@ The tests cover reconstruction, orthogonality on an ill-conditioned matrix,
 all three non-finite values in every position of a 3-by-2 matrix, invalid
 shapes, dependent columns, extreme finite scales, vector and multi-output
 least-squares solutions, pseudoinverse identities, tall least-squares
-equivalence, wide minimum-norm solutions, normal-equation residuals,
+equivalence, vector and multi-output wide minimum-norm solves, wide
+pseudoinverse solutions, normal-equation residuals,
 invalid right-hand sides, and rejection of non-finite test results. GitHub Actions compiles and runs them on Java 8 and 17.
 
 This is an educational modified Gram-Schmidt implementation. Each projection

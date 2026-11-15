@@ -9,8 +9,12 @@ public class QRDecompositionTest {
         testFitsOverdeterminedData();
         testLeastSquaresResidualIsOrthogonal();
         testLeastSquaresScaleExtremes();
+        testWideLeastSquaresReturnsMinimumNormSolution();
+        testWideLeastSquaresScaleExtremes();
+        testWideLeastSquaresRejectsDependentRows();
         testSolvesMultipleRightHandSides();
         testMultipleRightHandSidesAtScaleExtremes();
+        testSolvesWideMultipleRightHandSides();
         testPseudoInverseSatisfiesMoorePenroseIdentities();
         testPseudoInverseMatchesLeastSquares();
         testPseudoInverseAtScaleExtremes();
@@ -176,6 +180,57 @@ public class QRDecompositionTest {
         }
     }
 
+    private static void testWideLeastSquaresReturnsMinimumNormSolution() {
+        double[][] matrix = {
+                {1, 0, 1},
+                {0, 1, 1}
+        };
+        double[] solution =
+                QRDecomposition.solveLeastSquares(
+                        matrix, new double[] {1, 2});
+
+        assertVectorClose(new double[] {0, 1, 1}, solution, 1e-12);
+        assertVectorClose(
+                new double[] {1, 2},
+                multiply(matrix, solution),
+                1e-12);
+
+        // [-1, -1, 1] spans A's null space. A solution orthogonal to it
+        // is the unique solution with minimum Euclidean norm.
+        double nullSpaceDot = -solution[0] - solution[1] + solution[2];
+        if (Math.abs(nullSpaceDot) > 1e-12) {
+            throw new AssertionError(
+                    "Wide least-squares solution is not minimum norm: "
+                            + nullSpaceDot);
+        }
+    }
+
+    private static void testWideLeastSquaresScaleExtremes() {
+        for (double scale : new double[] {1e-200, 1e200}) {
+            double[][] matrix = {
+                    {scale, 0, scale},
+                    {0, scale, scale}
+            };
+            double[] rightHandSide = {scale, 2 * scale};
+
+            assertVectorClose(
+                    new double[] {0, 1, 1},
+                    QRDecomposition.solveLeastSquares(
+                            matrix, rightHandSide),
+                    1e-12);
+        }
+    }
+
+    private static void testWideLeastSquaresRejectsDependentRows() {
+        assertLeastSquaresRejected(
+                new double[][] {
+                        {1, 2, 3},
+                        {2, 4, 6}
+                },
+                new double[] {1, 2},
+                "Matrix columns are linearly dependent.");
+    }
+
     private static void testSolvesMultipleRightHandSides() {
         double[][] matrix = {
                 {1, 0},
@@ -219,6 +274,41 @@ public class QRDecompositionTest {
                     QRDecomposition.solveLeastSquares(
                             matrix, rightHandSides),
                     1e-12);
+        }
+    }
+
+    private static void testSolvesWideMultipleRightHandSides() {
+        double[][] matrix = {
+                {1, 0, 1},
+                {0, 1, 1}
+        };
+        double[][] rightHandSides = {
+                {1, 2},
+                {2, 1}
+        };
+
+        double[][] solution =
+                QRDecomposition.solveLeastSquares(
+                        matrix, rightHandSides);
+
+        assertMatrixClose(
+                new double[][] {
+                        {0, 1},
+                        {1, 0},
+                        {1, 1}
+                },
+                solution);
+        assertMatrixClose(rightHandSides, multiply(matrix, solution));
+
+        for (int rightHandSide = 0; rightHandSide < 2; rightHandSide++) {
+            double nullSpaceDot = -solution[0][rightHandSide]
+                    - solution[1][rightHandSide]
+                    + solution[2][rightHandSide];
+            if (Math.abs(nullSpaceDot) > 1e-12) {
+                throw new AssertionError(
+                        "Wide multi-output solution is not minimum norm: "
+                                + nullSpaceDot);
+            }
         }
     }
 
@@ -628,6 +718,16 @@ public class QRDecompositionTest {
             }
         }
 
+        return result;
+    }
+
+    private static double[] multiply(double[][] matrix, double[] vector) {
+        double[] result = new double[matrix.length];
+        for (int row = 0; row < matrix.length; row++) {
+            for (int column = 0; column < vector.length; column++) {
+                result[row] += matrix[row][column] * vector[column];
+            }
+        }
         return result;
     }
 

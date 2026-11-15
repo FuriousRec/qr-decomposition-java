@@ -77,21 +77,26 @@ public class QRDecomposition {
     }
 
     /**
-     * Solves the full-column-rank least-squares problem min ||Ax - b||_2.
+     * Solves the full-rank least-squares problem min ||Ax - b||_2.
      *
      * <p>For square matrices this is an ordinary linear solve. For tall
      * matrices it returns the vector whose residual is orthogonal to every
-     * column of A.</p>
+     * column of A. For a wide, full-row-rank matrix, the system is
+     * underdetermined and this method returns the exact solution with minimum
+     * Euclidean norm.</p>
      */
     public static double[] solveLeastSquares(
             double[][] inputMatrix,
             double[] rightHandSide) {
 
-        validateInput(inputMatrix);
+        int columnCount = validateMatrix(inputMatrix);
         validateRightHandSide(rightHandSide, inputMatrix.length);
 
+        if (inputMatrix.length < columnCount) {
+            return solveMinimumNormWide(inputMatrix, rightHandSide);
+        }
+
         QRResult decomposition = qrDecomposition(inputMatrix);
-        int columnCount = inputMatrix[0].length;
         double[] projected = new double[columnCount];
 
         // y = Q^T b
@@ -118,23 +123,27 @@ public class QRDecomposition {
     }
 
     /**
-     * Solves several full-column-rank least-squares problems with one QR
+     * Solves several full-rank least-squares problems with one QR
      * decomposition.
      *
      * <p>Each column of {@code rightHandSides} is an independent right-hand
      * side. If A is m-by-n and B is m-by-k, the returned solution is n-by-k
-     * and minimizes ||AX-B|| for every column of B.</p>
+     * and minimizes ||AX-B|| for every column of B. For a wide matrix, each
+     * result column is the exact minimum-norm solution.</p>
      */
     public static double[][] solveLeastSquares(
             double[][] inputMatrix,
             double[][] rightHandSides) {
 
-        validateInput(inputMatrix);
+        int columnCount = validateMatrix(inputMatrix);
         validateRightHandSides(rightHandSides, inputMatrix.length);
+
+        if (inputMatrix.length < columnCount) {
+            return solveMinimumNormWide(inputMatrix, rightHandSides);
+        }
 
         QRResult decomposition = qrDecomposition(inputMatrix);
         int rowCount = inputMatrix.length;
-        int columnCount = inputMatrix[0].length;
         int rightHandSideCount = rightHandSides[0].length;
         double[][] projected =
                 new double[columnCount][rightHandSideCount];
@@ -181,6 +190,83 @@ public class QRDecomposition {
             }
         }
 
+        return solution;
+    }
+
+    /**
+     * Solves Ax = b for a wide full-row-rank matrix from A^T = QR.
+     * Solving R^T z = b and then x = Qz produces the unique solution in the
+     * row space of A, which is orthogonal to A's null space and therefore has
+     * minimum Euclidean norm.
+     */
+    private static double[] solveMinimumNormWide(
+            double[][] inputMatrix,
+            double[] rightHandSide) {
+
+        QRResult transposeDecomposition =
+                qrDecomposition(transpose(inputMatrix));
+        int rowCount = inputMatrix.length;
+        int columnCount = inputMatrix[0].length;
+        double[] triangularSolution = new double[rowCount];
+
+        // Solve R^T z = b by forward substitution.
+        for (int row = 0; row < rowCount; row++) {
+            double remaining = rightHandSide[row];
+            for (int column = 0; column < row; column++) {
+                remaining -= transposeDecomposition.R[column][row]
+                        * triangularSolution[column];
+            }
+            triangularSolution[row] = remaining
+                    / transposeDecomposition.R[row][row];
+            requireFiniteLeastSquaresValue(triangularSolution[row]);
+        }
+
+        // x = Qz lies in the row space of A.
+        double[] solution = new double[columnCount];
+        for (int row = 0; row < columnCount; row++) {
+            solution[row] = dotProduct(
+                    transposeDecomposition.Q[row], triangularSolution);
+            requireFiniteLeastSquaresValue(solution[row]);
+        }
+        return solution;
+    }
+
+    /** Solves several wide systems while sharing one QR decomposition. */
+    private static double[][] solveMinimumNormWide(
+            double[][] inputMatrix,
+            double[][] rightHandSides) {
+
+        QRResult transposeDecomposition =
+                qrDecomposition(transpose(inputMatrix));
+        int rowCount = inputMatrix.length;
+        int columnCount = inputMatrix[0].length;
+        int rightHandSideCount = rightHandSides[0].length;
+        double[][] solution =
+                new double[columnCount][rightHandSideCount];
+
+        for (int rightHandSide = 0;
+                rightHandSide < rightHandSideCount;
+                rightHandSide++) {
+
+            double[] triangularSolution = new double[rowCount];
+            for (int row = 0; row < rowCount; row++) {
+                double remaining = rightHandSides[row][rightHandSide];
+                for (int column = 0; column < row; column++) {
+                    remaining -= transposeDecomposition.R[column][row]
+                            * triangularSolution[column];
+                }
+                triangularSolution[row] = remaining
+                        / transposeDecomposition.R[row][row];
+                requireFiniteLeastSquaresValue(triangularSolution[row]);
+            }
+
+            for (int row = 0; row < columnCount; row++) {
+                solution[row][rightHandSide] = dotProduct(
+                        transposeDecomposition.Q[row], triangularSolution);
+                requireFiniteLeastSquaresValue(
+                        solution[row][rightHandSide]);
+            }
+        }
         return solution;
     }
 
