@@ -1,6 +1,6 @@
 # QR Decomposition
 
-This project implements QR decomposition in Java using the modified Gram-Schmidt process.
+This project implements QR decomposition in Java using two-pass modified Gram-Schmidt.
 
 QR decomposition splits a matrix `A` into two matrices:
 
@@ -119,7 +119,9 @@ identifying the zero-based row and column. Rank detection compares each residual
 norm using a relative `1e-12` tolerance, so uniformly scaling a matrix does not
 change whether its columns are considered dependent.
 
-The tests cover reconstruction, orthogonality on an ill-conditioned matrix,
+The tests cover reconstruction, orthogonality on ill-conditioned matrices,
+nearly dependent least-squares coefficients and pseudoinverse columns across
+scales from `1e-200` to `1e200`,
 all three non-finite values in every position of a 3-by-2 matrix, invalid
 shapes, dependent columns, extreme finite scales, vector and multi-output
 least-squares solutions, pseudoinverse identities, tall least-squares
@@ -127,10 +129,18 @@ equivalence, vector and multi-output wide minimum-norm solves, wide
 pseudoinverse solutions, normal-equation residuals,
 invalid right-hand sides, and rejection of non-finite test results. GitHub Actions compiles and runs them on Java 8 and 17.
 
-This is an educational modified Gram-Schmidt implementation. Each projection
-uses the progressively reduced residual vector, which retains orthogonality
-better than classical Gram-Schmidt for nearly dependent columns. It is still
-not as robust as Householder QR. The norm calculation uses `Math.hypot` to avoid
+This is an educational two-pass modified Gram-Schmidt implementation. Each
+projection uses the progressively reduced residual vector. A second pass removes
+roundoff components left in earlier Q directions, and adds those corrections to
+R so reconstruction is preserved. This prevents a single pass from returning
+poor least-squares coefficients for accepted, nearly dependent columns.
+For example, columns with a shared first entry of 1 and separate `1e-8` entries
+below it should fit `[1, 0, 0, 0]` with coefficients near `[1/3, 1/3, 1/3]`;
+the old single pass returned `[1, 0, 0]`.
+
+The second pass roughly doubles projection work without changing asymptotic
+complexity. This remains a floating-point educational solver with a relative
+rank cutoff, not a rank-revealing SVD implementation. The norm uses `Math.hypot` to avoid
 overflow and underflow from squaring finite values; a column whose true norm
 exceeds the finite `double` range is rejected with a clear error.
 

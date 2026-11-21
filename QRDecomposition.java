@@ -16,7 +16,7 @@ public class QRDecomposition {
     }
 
     /**
-     * Performs the QR decomposition using the modified Gram-Schmidt process.
+     * Performs QR decomposition using two-pass modified Gram-Schmidt.
      */
     public static QRResult qrDecomposition(double[][] inputMatrix) {
         validateInput(inputMatrix);
@@ -39,21 +39,25 @@ public class QRDecomposition {
                                 + currentColumn + ").");
             }
 
-            // Remove the parts of the vector that point in previous Q directions.
-            for (int previousColumn = 0; previousColumn < currentColumn; previousColumn++) {
+            // A second modified Gram-Schmidt pass removes roundoff left along
+            // earlier Q columns when the input columns are nearly dependent.
+            for (int pass = 0; pass < 2; pass++) {
+                for (int previousColumn = 0; previousColumn < currentColumn; previousColumn++) {
 
-                // Get a previous column of Q.
-                double[] previousQColumn = getColumn(Q, previousColumn);
+                    // Get a previous column of Q.
+                    double[] previousQColumn = getColumn(Q, previousColumn);
 
-                // Project the already-reduced vector. This is modified Gram-Schmidt:
-                // using the residual improves orthogonality for nearly dependent columns.
-                R[previousColumn][currentColumn] =
-                        dotProduct(previousQColumn, remainingVector);
+                    // Project the already-reduced vector. This is modified Gram-Schmidt:
+                    // using the residual improves orthogonality for nearly dependent columns.
+                    double projection = dotProduct(previousQColumn, remainingVector);
+                    // Accumulate both passes so Q * R still reconstructs the input.
+                    R[previousColumn][currentColumn] += projection;
 
-                // Subtract that part from the remaining vector.
-                for (int row = 0; row < rowCount; row++) {
-                    remainingVector[row] =
-                            remainingVector[row] - R[previousColumn][currentColumn] * previousQColumn[row];
+                    // Subtract that part from the remaining vector.
+                    for (int row = 0; row < rowCount; row++) {
+                        remainingVector[row] =
+                                remainingVector[row] - projection * previousQColumn[row];
+                    }
                 }
             }
 

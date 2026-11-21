@@ -4,6 +4,8 @@ public class QRDecompositionTest {
     public static void main(String[] args) {
         testQrRebuildsOriginalMatrix();
         testIllConditionedMatrixKeepsOrthonormalColumns();
+        testNearlyDependentColumnsAreReorthogonalized();
+        testNearlyDependentLeastSquaresAndPseudoInverse();
         testScaleExtremesRemainStable();
         testSolvesExactSquareSystem();
         testFitsOverdeterminedData();
@@ -80,6 +82,52 @@ public class QRDecompositionTest {
         assertMatrixClose(
                 illConditionedMatrix,
                 multiply(result.Q, result.R));
+    }
+
+    private static void testNearlyDependentColumnsAreReorthogonalized() {
+        for (double epsilon : new double[] {1e-8, 1e-10}) {
+            for (double scale : new double[] {1e-200, 1.0, 1e200}) {
+                double[][] matrix = nearlyDependentMatrix(epsilon, scale);
+                QRDecomposition.QRResult result = QRDecomposition.qrDecomposition(matrix);
+
+                assertOrthonormal(result.Q, 1e-12);
+                assertMatrixRelativeClose(matrix, multiply(result.Q, result.R), 1e-12);
+            }
+        }
+    }
+
+    private static void testNearlyDependentLeastSquaresAndPseudoInverse() {
+        for (double epsilon : new double[] {1e-8, 1e-10}) {
+            for (double scale : new double[] {1e-200, 1.0, 1e200}) {
+                double[][] matrix = nearlyDependentMatrix(epsilon, scale);
+                double[] target = {scale, 0, 0, 0};
+                // Symmetry gives equal coefficients c, and minimizing
+                // (3c - 1)^2 + 3 * epsilon^2 * c^2 gives c = 1/(3+epsilon^2).
+                double coefficient = 1.0 / (3.0 + epsilon * epsilon);
+                double[] expected = {coefficient, coefficient, coefficient};
+                assertVectorClose(expected,
+                        QRDecomposition.solveLeastSquares(matrix, target), 1e-9);
+
+                double[][] targets = {{scale, 2 * scale}, {0, 0}, {0, 0}, {0, 0}};
+                double[][] solutions = QRDecomposition.solveLeastSquares(matrix, targets);
+                double[][] inverse = QRDecomposition.pseudoInverse(matrix);
+                for (int row = 0; row < 3; row++) {
+                    assertVectorClose(new double[] {coefficient, 2 * coefficient},
+                            solutions[row], 1e-9);
+                    assertVectorClose(new double[] {coefficient},
+                            new double[] {inverse[row][0] * scale}, 1e-9);
+                }
+            }
+        }
+    }
+
+    private static double[][] nearlyDependentMatrix(double epsilon, double scale) {
+        return new double[][] {
+                {scale, scale, scale},
+                {epsilon * scale, 0, 0},
+                {0, epsilon * scale, 0},
+                {0, 0, epsilon * scale}
+        };
     }
 
     private static void testScaleExtremesRemainStable() {
