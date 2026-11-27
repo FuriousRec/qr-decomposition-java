@@ -8,6 +8,12 @@ public class QRDecompositionTest {
         testNearlyDependentLeastSquaresAndPseudoInverse();
         testScaleExtremesRemainStable();
         testSolvesExactSquareSystem();
+        testWeightedAnalyticalFit();
+        testZeroWeightsAndMultipleTargets();
+        testWeightScaleInvariance();
+        testWeightedWideMinimumNorm();
+        testWeightedInputsUnchanged();
+        testInvalidWeightsAndWeightedRank();
         testFitsOverdeterminedData();
         testLeastSquaresResidualIsOrthogonal();
         testLeastSquaresScaleExtremes();
@@ -157,6 +163,102 @@ public class QRDecompositionTest {
                 new double[] {0.2, 0.6},
                 QRDecomposition.solveLeastSquares(matrix, rightHandSide),
                 1e-12);
+    }
+
+    private static void testWeightedAnalyticalFit() {
+        double[][] matrix = {{1, 0}, {1, 1}, {1, 2}};
+        double[] target = {1, 2, 2};
+        double[] weights = {1, 1, 4};
+        double[] result = QRDecomposition.solveWeightedLeastSquares(matrix, target, weights);
+        assertVectorClose(new double[] {25.0 / 21, 3.0 / 7}, result, 1e-12);
+        // At the optimum, A^T W (Ax-b) = 0.
+        double[] weightedResidual = new double[2];
+        for (int row = 0; row < 3; row++) {
+            double residual = result[0] + row * result[1] - target[row];
+            weightedResidual[0] += weights[row] * residual;
+            weightedResidual[1] += row * weights[row] * residual;
+        }
+        assertVectorClose(new double[] {0, 0}, weightedResidual, 1e-12);
+    }
+
+    private static void testZeroWeightsAndMultipleTargets() {
+        double[][] matrix = {{1}, {1}, {1}};
+        double[] weights = {1, 1, 0};
+        assertVectorClose(new double[] {1.5}, QRDecomposition.solveWeightedLeastSquares(
+                matrix, new double[] {1, 2, 100}, weights), 1e-12);
+        assertMatrixClose(new double[][] {{1.5, 3}}, QRDecomposition.solveWeightedLeastSquares(
+                matrix, new double[][] {{1, 2}, {2, 4}, {100, 200}}, weights));
+    }
+
+    private static void testWeightScaleInvariance() {
+        double[][] matrix = {{1, 0}, {1, 1}, {1, 2}};
+        for (double scale : new double[] {1e-200, 1, 1e200}) {
+            double[] weights = {scale, scale, 4 * scale};
+            assertVectorClose(new double[] {25.0 / 21, 3.0 / 7},
+                    QRDecomposition.solveWeightedLeastSquares(matrix, new double[] {1, 2, 2}, weights),
+                    1e-12);
+            assertMatrixClose(new double[][] {{25.0 / 21, 50.0 / 21}, {3.0 / 7, 6.0 / 7}},
+                    QRDecomposition.solveWeightedLeastSquares(matrix,
+                            new double[][] {{1, 2}, {2, 4}, {2, 4}}, weights));
+        }
+        assertVectorClose(new double[] {2}, QRDecomposition.solveWeightedLeastSquares(
+                new double[][] {{1}, {1}}, new double[] {2, 99},
+                new double[] {Double.MAX_VALUE, Double.MIN_VALUE}), 1e-12);
+        // Balance the tiny weight with a large design entry. Computing the raw
+        // weight ratio first would underflow and incorrectly discard this row.
+        double smallRow = Math.sqrt(Double.MIN_VALUE) / Math.sqrt(Double.MAX_VALUE) * 1e300;
+        assertVectorClose(new double[] {1.5}, QRDecomposition.solveWeightedLeastSquares(
+                new double[][] {{smallRow}, {1e300}}, new double[] {smallRow, 2e300},
+                new double[] {Double.MAX_VALUE, Double.MIN_VALUE}), 1e-12);
+    }
+
+    private static void testWeightedWideMinimumNorm() {
+        double[][] matrix = {{1, 0, 1}, {0, 1, 1}};
+        assertVectorClose(new double[] {0, 1, 1}, QRDecomposition.solveWeightedLeastSquares(
+                matrix, new double[] {1, 2}, new double[] {0.1, 5}), 1e-12);
+    }
+
+    private static void testWeightedInputsUnchanged() {
+        double[][] matrix = {{1, 0}, {1, 1}, {1, 2}};
+        double[] target = {1, 2, 2};
+        double[][] targets = {{1, 2}, {2, 4}, {2, 4}};
+        double[] weights = {7, 7, 7};
+        assertVectorClose(QRDecomposition.solveLeastSquares(matrix, target),
+                QRDecomposition.solveWeightedLeastSquares(matrix, target, weights), 1e-12);
+        assertMatrixClose(QRDecomposition.solveLeastSquares(matrix, targets),
+                QRDecomposition.solveWeightedLeastSquares(matrix, targets, weights));
+        assertMatrixClose(new double[][] {{1, 0}, {1, 1}, {1, 2}}, matrix);
+        assertVectorClose(new double[] {1, 2, 2}, target, 0);
+        assertMatrixClose(new double[][] {{1, 2}, {2, 4}, {2, 4}}, targets);
+        assertVectorClose(new double[] {7, 7, 7}, weights, 0);
+    }
+
+    private static void testInvalidWeightsAndWeightedRank() {
+        double[][] matrix = {{1}, {1}};
+        for (double[] invalid : new double[][] {null, {}, {1}, {0, 0}, {-1, 1},
+                {Double.NaN, 1}, {Double.POSITIVE_INFINITY, 1}, {Double.NEGATIVE_INFINITY, 1}}) {
+            expectWeightedRejection(() -> QRDecomposition.solveWeightedLeastSquares(
+                    matrix, new double[] {1, 2}, invalid));
+            expectWeightedRejection(() -> QRDecomposition.solveWeightedLeastSquares(
+                    matrix, new double[][] {{1}, {2}}, invalid));
+        }
+        expectWeightedRejection(() -> QRDecomposition.solveWeightedLeastSquares(
+                new double[][] {{1, 0}, {0, 1}, {1, 1}}, new double[] {1, 2, 3},
+                new double[] {1, 0, 0}));
+        // Zero weight does not excuse malformed/non-finite input data.
+        expectWeightedRejection(() -> QRDecomposition.solveWeightedLeastSquares(
+                new double[][] {{1}, {Double.NaN}}, new double[] {1, 2}, new double[] {1, 0}));
+        expectWeightedRejection(() -> QRDecomposition.solveWeightedLeastSquares(
+                matrix, new double[] {1, Double.NaN}, new double[] {1, 0}));
+    }
+
+    private static void expectWeightedRejection(Runnable operation) {
+        try {
+            operation.run();
+        } catch (IllegalArgumentException expected) {
+            return;
+        }
+        throw new AssertionError("Expected invalid weighted system to be rejected");
     }
 
     private static void testFitsOverdeterminedData() {

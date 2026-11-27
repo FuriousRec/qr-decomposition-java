@@ -198,6 +198,67 @@ public class QRDecomposition {
     }
 
     /**
+     * Minimizes sum_i weights[i] * (A_i x - b_i)^2 using QR.
+     * Weights must be finite and nonnegative, with at least one positive value.
+     * Zero weights ignore observations; the weighted matrix must retain full rank.
+     * Inputs are not modified. Wide full-row-rank systems return minimum-norm solutions.
+     */
+    public static double[] solveWeightedLeastSquares(
+            double[][] inputMatrix, double[] rightHandSide, double[] weights) {
+        validateMatrix(inputMatrix);
+        validateRightHandSide(rightHandSide, inputMatrix.length);
+        double[] scales = weightScales(weights, inputMatrix.length);
+        double[] weightedTarget = new double[rightHandSide.length];
+        for (int row = 0; row < weightedTarget.length; row++) {
+            weightedTarget[row] = rightHandSide[row] * scales[row];
+        }
+        return solveLeastSquares(scaleRows(inputMatrix, scales), weightedTarget);
+    }
+
+    /** Solves multiple weighted targets with the same row weights and one QR factorization. */
+    public static double[][] solveWeightedLeastSquares(
+            double[][] inputMatrix, double[][] rightHandSides, double[] weights) {
+        validateMatrix(inputMatrix);
+        validateRightHandSides(rightHandSides, inputMatrix.length);
+        double[] scales = weightScales(weights, inputMatrix.length);
+        return solveLeastSquares(scaleRows(inputMatrix, scales), scaleRows(rightHandSides, scales));
+    }
+
+    private static double[] weightScales(double[] weights, int rows) {
+        if (weights == null || weights.length != rows) {
+            throw new IllegalArgumentException("Provide one weight per matrix row.");
+        }
+        double maximum = 0.0;
+        for (double weight : weights) {
+            if (!Double.isFinite(weight) || weight < 0.0) {
+                throw new IllegalArgumentException("Weights must be finite and nonnegative.");
+            }
+            maximum = Math.max(maximum, weight);
+        }
+        if (maximum == 0.0) {
+            throw new IllegalArgumentException("At least one weight must be positive.");
+        }
+        double[] scales = new double[rows];
+        double largestRoot = Math.sqrt(maximum);
+        for (int row = 0; row < rows; row++) {
+            // A common weight factor does not change the minimizer. Taking roots
+            // before dividing avoids underflow in weights[row] / maximum.
+            scales[row] = Math.sqrt(weights[row]) / largestRoot;
+        }
+        return scales;
+    }
+
+    private static double[][] scaleRows(double[][] matrix, double[] scales) {
+        double[][] result = new double[matrix.length][matrix[0].length];
+        for (int row = 0; row < matrix.length; row++) {
+            for (int column = 0; column < matrix[row].length; column++) {
+                result[row][column] = matrix[row][column] * scales[row];
+            }
+        }
+        return result;
+    }
+
+    /**
      * Solves Ax = b for a wide full-row-rank matrix from A^T = QR.
      * Solving R^T z = b and then x = Qz produces the unique solution in the
      * row space of A, which is orthogonal to A's null space and therefore has
