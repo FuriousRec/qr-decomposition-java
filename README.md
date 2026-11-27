@@ -72,6 +72,35 @@ double[][] coefficients =
 // columns: [1, 3] and [2, -1]
 ```
 
+## Weighted least-squares fitting
+
+Use relative row weights when some observations should contribute more than
+others to the fit:
+
+```java
+double[][] design = {{1, 0}, {1, 1}, {1, 2}};
+double[] observations = {1, 2, 2};
+double[] weights = {1, 1, 4};
+double[] coefficients = QRDecomposition.solveWeightedLeastSquares(
+        design, observations, weights);
+// intercept = 25/21, slope = 3/7
+```
+
+The method minimizes `sum(weights[i] * residual[i]^2)`. The overload accepting
+a target matrix applies the same row weights to every output column and shares
+one QR factorization. Equal weights reproduce ordinary least squares; zero
+weights ignore observations. Weights must be finite, nonnegative, have one entry
+per row, and include at least one positive value. The weighted matrix must retain
+full rank under the solver's relative tolerance; zeroing too many rows is rejected.
+Wide full-row-rank weighted systems retain minimum-norm solution behavior.
+
+Both the design and targets are copied and scaled by square-root weights before
+using the existing QR solver, so normal equations are not formed and input arrays
+remain unchanged. A common weight magnitude is normalized away, since it does not
+change the minimizer. Square roots are taken before division to avoid premature
+underflow of a weight ratio. Extreme data/weight combinations remain subject to
+`double` precision and the existing rank cutoff.
+
 ## Moore-Penrose pseudoinverse
 
 Any rectangular full-rank matrix can also be converted into its Moore-Penrose
@@ -120,6 +149,8 @@ norm using a relative `1e-12` tolerance, so uniformly scaling a matrix does not
 change whether its columns are considered dependent.
 
 The tests cover reconstruction, orthogonality on ill-conditioned matrices,
+weighted analytical fits, zero-weight outliers, multiple weighted outputs,
+weight-scale invariance, wide weighted solutions, input preservation and invalid weights,
 nearly dependent least-squares coefficients and pseudoinverse columns across
 scales from `1e-200` to `1e200`,
 all three non-finite values in every position of a 3-by-2 matrix, invalid
